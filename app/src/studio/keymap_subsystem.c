@@ -15,6 +15,7 @@ LOG_MODULE_DECLARE(zmk_studio, CONFIG_ZMK_STUDIO_LOG_LEVEL);
 #include <zmk/keymap.h>
 #include <zmk/studio/rpc.h>
 #include <zmk/physical_layouts.h>
+#include <zmk/events/layer_state_changed.h>
 
 #include <pb_encode.h>
 
@@ -537,6 +538,19 @@ ZMK_RPC_SUBSYSTEM_HANDLER(keymap, remove_layer, ZMK_STUDIO_RPC_HANDLER_SECURED);
 ZMK_RPC_SUBSYSTEM_HANDLER(keymap, restore_layer, ZMK_STUDIO_RPC_HANDLER_SECURED);
 ZMK_RPC_SUBSYSTEM_HANDLER(keymap, set_layer_props, ZMK_STUDIO_RPC_HANDLER_SECURED);
 
-static int event_mapper(const zmk_event_t *eh, zmk_studio_Notification *n) { return 0; }
+static int event_mapper(const zmk_event_t *eh, zmk_studio_Notification *n) {
+    const struct zmk_layer_state_changed *layer_ev = as_zmk_layer_state_changed(eh);
+    if (!layer_ev) {
+        return -ENOTSUP;
+    }
 
-ZMK_RPC_EVENT_MAPPER(keymap, event_mapper);
+    zmk_keymap_LayerStateChanged payload = zmk_keymap_LayerStateChanged_init_zero;
+    payload.layer = layer_ev->layer;
+    payload.state = layer_ev->state;
+    payload.timestamp = layer_ev->timestamp;
+
+    *n = ZMK_RPC_NOTIFICATION(keymap, layer_state_changed, payload);
+    return 0;
+}
+
+ZMK_RPC_EVENT_MAPPER(keymap, event_mapper, zmk_layer_state_changed);
