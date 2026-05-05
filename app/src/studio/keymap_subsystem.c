@@ -544,12 +544,20 @@ static int event_mapper(const zmk_event_t *eh, zmk_studio_Notification *n) {
         return -ENOTSUP;
     }
 
-    // DEBUG (切り分け): LayerStateChanged 送信は wire 上 SOF + 0x12 のみで EOF 来ない
-    // 症状あり。代わりに既知良好な unsaved_changes_status_changed (bool) を返して、
-    // bool が正しく encode されるかを観測する。
-    //   - 動けば → submessage encode 経路の問題 (LayerStateChanged 等)
-    //   - 動かなければ → event chain / RPC framework 全体の問題
-    *n = ZMK_RPC_NOTIFICATION(keymap, unsaved_changes_status_changed, layer_ev->state);
+    // roBa では MOUSE (Layer 4) は automouse-layer、SCROLL (Layer 5) は
+    // scroll-layers で trackball 動作中に高頻度トグルする。これを通知すると
+    // BLE indication が殺到して BT スタックを飽和させ HID 出力に支障が出る
+    // (2026-05-05 にトラックボール操作不能事象あり)。filter で除外する。
+    if (layer_ev->layer == 4 || layer_ev->layer == 5) {
+        return -ENOTSUP;
+    }
+
+    zmk_keymap_LayerStateChanged payload = zmk_keymap_LayerStateChanged_init_zero;
+    payload.layer = layer_ev->layer;
+    payload.state = layer_ev->state;
+    payload.timestamp = layer_ev->timestamp;
+
+    *n = ZMK_RPC_NOTIFICATION(keymap, layer_state_changed, payload);
     return 0;
 }
 
